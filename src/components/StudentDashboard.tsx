@@ -7,7 +7,6 @@ import {
   Clock,
   RefreshCw,
   Navigation,
-  User,
   LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,21 +42,24 @@ const StudentDashboard = ({ onBack }: StudentDashboardProps) => {
     queryFn: getRoutes,
   });
 
-  const fetchBuses = async () => {
-    if (selectedRoute) {
-      const buses = await getActiveBusesByRoute(selectedRoute);
-      setActiveBuses(buses);
-      setLastUpdate(new Date());
-    }
-  };
-
   useEffect(() => {
     if (!selectedRoute) return;
+
+    let cancelled = false;
+    const fetchBuses = async () => {
+      const buses = await getActiveBusesByRoute(selectedRoute);
+      if (cancelled) return;
+      setActiveBuses(buses);
+      setLastUpdate(new Date());
+    };
 
     fetchBuses();
     const interval = setInterval(fetchBuses, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [selectedRoute]);
 
   const selectedRouteInfo = routes?.find(
@@ -196,7 +198,7 @@ const StudentDashboard = ({ onBack }: StudentDashboardProps) => {
                   </CardHeader>
 
                   <CardContent>
-                    <LiveMap />
+                    <LiveMap buses={activeBuses} />
                   </CardContent>
                 </Card>
 
@@ -218,9 +220,7 @@ const StudentDashboard = ({ onBack }: StudentDashboardProps) => {
                           >
                             <div className="flex justify-between mb-2">
                               <div>
-                                <p className="font-bold">
-                                  {bus.numberPlate}
-                                </p>
+                                <p className="font-bold">{bus.busId}</p>
                                 <p className="text-sm text-gray-600">
                                   {bus.driverName}
                                 </p>

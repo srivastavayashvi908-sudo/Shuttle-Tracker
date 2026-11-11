@@ -1,69 +1,67 @@
-import { useState, useEffect } from "react";
-import { Bus, MapPin, Play, Square, LogOut } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Bus, Play, Square, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-interface Driver {
-  id: string;
-  name: string;
-  route: string;
-}
+import { sendLocation, stopTracking } from "@/services/busService";
+import type { Driver } from "@/types/types";
 
 interface DriverDashboardProps {
   driver: Driver;
   onLogout: () => void;
 }
 
+// Re-send the last known position so a stationary bus doesn't time out on the server.
+const HEARTBEAT_MS = 10_000;
+
 const DriverDashboard = ({ driver, onLogout }: DriverDashboardProps) => {
   const [tracking, setTracking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [currentPosition, setCurrentPosition] = useState<{
     latitude: number;
     longitude: number;
   } | null>(null);
+  const lastPosition = useRef<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     if (!tracking) return;
 
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      setError("Geolocation is not supported by your browser.");
+      setTracking(false);
       return;
     }
 
+    const push = (latitude: number, longitude: number) =>
+      sendLocation(driver, latitude, longitude).catch((e) =>
+        console.error("Failed to send location:", e)
+      );
+
     const watchId = navigator.geolocation.watchPosition(
-      async (pos) => {
+      (pos) => {
         const { latitude, longitude } = pos.coords;
-
+        lastPosition.current = { latitude, longitude };
         setCurrentPosition({ latitude, longitude });
-
-        try {
-          await fetch("http://localhost:5000/api/update-location", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              busId: driver.id,
-              route: driver.route,
-              latitude,
-              longitude,
-            }),
-          });
-        } catch (error) {
-          console.error("Failed to send location:", error);
-        }
+        push(latitude, longitude);
       },
       (err) => {
-        console.error("GPS error:", err);
+        setError(`GPS error: ${err.message}`);
+        setTracking(false);
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 0,
-      }
+      { enableHighAccuracy: true, maximumAge: 0 }
     );
+
+    const heartbeat = setInterval(() => {
+      if (lastPosition.current) {
+        push(lastPosition.current.latitude, lastPosition.current.longitude);
+      }
+    }, HEARTBEAT_MS);
 
     return () => {
       navigator.geolocation.clearWatch(watchId);
+      clearInterval(heartbeat);
+      lastPosition.current = null;
+      stopTracking(driver);
     };
   }, [tracking, driver]);
 
@@ -116,6 +114,12 @@ const DriverDashboard = ({ driver, onLogout }: DriverDashboardProps) => {
               )}
             </div>
 
+            {error && (
+              <div className="p-4 bg-red-50 text-red-700 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
             {currentPosition && (
               <div className="p-4 bg-indigo-50 rounded-lg text-sm space-y-1">
                 <p>
@@ -133,7 +137,10 @@ const DriverDashboard = ({ driver, onLogout }: DriverDashboardProps) => {
               {!tracking ? (
                 <Button
                   className="bg-green-600 hover:bg-green-700"
-                  onClick={() => setTracking(true)}
+                  onClick={() => {
+                    setError(null);
+                    setTracking(true);
+                  }}
                 >
                   <Play className="w-4 h-4 mr-2" />
                   Start Tracking

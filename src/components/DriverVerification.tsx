@@ -118,11 +118,11 @@ const DriverVerification = ({ onVerified, onBack }: DriverVerificationProps) => 
                     <div
                       key={driver.id}
                       className="flex items-center justify-between p-2 bg-white rounded border hover:border-blue-400 cursor-pointer transition-colors"
-                      onClick={() => setUniqueId(driver.uniqueId)}
+                      onClick={() => setUniqueId(driver.id)}
                     >
                       <div>
                         <p className="font-mono text-sm font-medium text-blue-600">
-                          {driver.uniqueId}
+                          {driver.id}
                         </p>
                         <p className="text-xs text-gray-600">{driver.name}</p>
                       </div>

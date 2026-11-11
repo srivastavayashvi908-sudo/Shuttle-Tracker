@@ -1,91 +1,70 @@
-// src/services/busService.ts
+import type { BusLocation, Driver, Route } from "@/types/types";
 
-export interface Route {
-  routeNumber: string;
-  routeName: string;
-  description: string;
-}
-
-export interface Driver {
-  id: string;
-  name: string;
-  route: string;
-}
-
-export interface BusLocation {
-  busId: string;
-  route: string;
-  latitude: number;
-  longitude: number;
-  lastUpdated: string;
-}
-
-/* ===============================
-   MOCK DRIVERS
-================================= */
+// Relative URL: Vite proxies /api to the Express server in dev (see vite.config.ts).
+const API = "/api";
 
 const drivers: Driver[] = [
   { id: "DRV001", name: "Ravi", route: "Route 1" },
   { id: "DRV002", name: "Arjun", route: "Route 2" },
 ];
 
-/* ===============================
-   VERIFY DRIVER
-================================= */
+const routes: Route[] = [
+  {
+    routeNumber: "Route 1",
+    routeName: "Men's Hostel - Main Gate",
+    description: "Goes to and fro the Men's Hostel and the Main Gate.",
+  },
+  {
+    routeNumber: "Route 2",
+    routeName: "Ladies Hostel - PRP/SJT",
+    description: "Covers academic blocks from the ladies hostel.",
+  },
+];
 
-export const verifyDriver = async (
-  driverId: string
-): Promise<Driver | null> => {
+// Throws on an unknown ID so react-query's isError fires and the UI shows the error.
+export const verifyDriver = async (driverId: string): Promise<Driver> => {
   const driver = drivers.find((d) => d.id === driverId);
-  return driver || null;
+  if (!driver) throw new Error("Invalid driver ID");
+  return driver;
 };
 
-/* ===============================
-   GET ALL DRIVERS
-================================= */
+export const getAllDrivers = async (): Promise<Driver[]> => drivers;
 
-export const getAllDrivers = async (): Promise<Driver[]> => {
-  return drivers;
-};
-
-/* ===============================
-   GET ROUTES
-================================= */
-
-export const getRoutes = async (): Promise<Route[]> => {
-  return [
-    {
-      routeNumber: "Route 1",
-      routeName: "Men's Hostel - Main Gate",
-      description: "Goes to and fro the Men's Hostel and the Main Gate.",
-    },
-    {
-      routeNumber: "Route 2",
-      routeName: "Ladies Hostel- PRP/SJT",
-      description: "Covers academic blocks from the ladies hostel.",
-    },
-  ];
-};
-
-/* ===============================
-   GET ACTIVE BUSES FROM BACKEND
-================================= */
+export const getRoutes = async (): Promise<Route[]> => routes;
 
 export const getActiveBusesByRoute = async (
   route: string
 ): Promise<BusLocation[]> => {
   try {
-    const response = await fetch(
-      `http://localhost:5000/api/active-buses/${route}`
-    );
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch active buses");
-    }
-
+    const response = await fetch(`${API}/active-buses/${encodeURIComponent(route)}`);
+    if (!response.ok) throw new Error("Failed to fetch active buses");
     return await response.json();
   } catch (error) {
     console.error("Error fetching active buses:", error);
     return [];
   }
+};
+
+export const sendLocation = async (
+  driver: Driver,
+  latitude: number,
+  longitude: number
+): Promise<void> => {
+  await fetch(`${API}/update-location`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      busId: driver.id,
+      route: driver.route,
+      driverName: driver.name,
+      latitude,
+      longitude,
+    }),
+  });
+};
+
+export const stopTracking = async (driver: Driver): Promise<void> => {
+  await fetch(`${API}/stop-tracking/${encodeURIComponent(driver.id)}`, {
+    method: "POST",
+  }).catch(() => {});
 };
